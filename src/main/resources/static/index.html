@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <title>Loja de Carros - Painel e CRUD</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 30px; background-color: #f4f4f9; }
+        h1, h2 { color: #333; }
+        .card { background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); margin-bottom: 25px; }
+        input, select, button { padding: 8px 12px; margin: 5px 0; border: 1px solid #ccc; border-radius: 4px; }
+        button { cursor: pointer; background: #007bff; color: white; border: none; font-weight: bold; }
+        button:hover { background: #0056b3; }
+        table { width: 100%; border-collapse: collapse; margin-top: 15px; }
+        th, td { border: 1px solid #ddd; padding: 10px; text-align: left; }
+        th { background: #f0f0f0; }
+        .btn-delete { background: #dc3545; }
+        .btn-delete:hover { background: #bd2130; }
+        .msg { font-weight: bold; margin-top: 8px; }
+        .success { color: green; }
+        .error { color: red; }
+    </style>
+</head>
+<body>
+
+<h1>Sistema Loja de Carro</h1>
+
+<!-- CRUD DE USUÁRIOS -->
+<div class="card">
+    <h2>Cadastro de Usuários</h2>
+    <input type="text" id="nomeUsuario" placeholder="Nome do Usuário">
+    <select id="cargoUsuario">
+        <option value="ADMIN">ADMIN</option>
+        <option value="GERENTE">GERENTE</option>
+        <option value="VENDEDOR">VENDEDOR</option>
+        <option value="CLIENTE">CLIENTE</option>
+    </select>
+    <button onclick="salvarUsuario()">Salvar Usuário</button>
+    <div id="msgUsuario" class="msg"></div>
+
+    <h3>Lista de Usuários</h3>
+    <table>
+        <thead>
+        <tr>
+            <th>ID</th>
+            <th>Nome</th>
+            <th>Cargo</th>
+            <th>Ações</th>
+        </tr>
+        </thead>
+        <tbody id="tabelaUsuarios"></tbody>
+    </table>
+</div>
+
+<!-- CADASTRO DE CARRO (COM VALIDAÇÃO DE CARGO) -->
+<div class="card">
+    <h2>Cadastro de Carro (Apenas Gerente/Admin)</h2>
+    <label>Selecione quem está realizando o cadastro:</label><br>
+    <select id="selectUsuarioLogado"></select><br><br>
+
+    <input type="text" id="modeloCarro" placeholder="Modelo do Carro (< 5 carac.)">
+    <input type="number" id="anoCarro" placeholder="Ano">
+    <input type="number" step="0.01" id="precoCarro" placeholder="Preço">
+    <button onclick="cadastrarCarro()">Cadastrar Carro</button>
+    <div id="msgCarro" class="msg"></div>
+</div>
+
+<script>
+    const API_URL = "http://localhost:8080";
+
+    async function listarUsuarios() {
+        try {
+            const res = await fetch(`${API_URL}/usuario/listar`);
+            const usuarios = await res.json();
+
+            const tabela = document.getElementById("tabelaUsuarios");
+            const selectLogado = document.getElementById("selectUsuarioLogado");
+
+            tabela.innerHTML = "";
+            selectLogado.innerHTML = "";
+
+            usuarios.forEach(u => {
+                tabela.innerHTML += `
+                        <tr>
+                            <td>${u.id}</td>
+                            <td>${u.nome}</td>
+                            <td><strong>${u.cargo}</strong></td>
+                            <td>
+                                <button class="btn-delete" onclick="deletarUsuario(${u.id})">Excluir</button>
+                            </td>
+                        </tr>
+                    `;
+                selectLogado.innerHTML += `<option value="${u.id}">${u.nome} (${u.cargo})</option>`;
+            });
+        } catch (err) {
+            console.error("Erro ao listar:", err);
+        }
+    }
+
+    async function salvarUsuario() {
+        const nome = document.getElementById("nomeUsuario").value;
+        const cargo = document.getElementById("cargoUsuario").value;
+        const msg = document.getElementById("msgUsuario");
+
+        try {
+            const res = await fetch(`${API_URL}/usuario/salvar`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ nome, cargo })
+            });
+
+            if (res.ok) {
+                msg.className = "msg success";
+                msg.innerText = "Usuário salvo com sucesso!";
+                document.getElementById("nomeUsuario").value = "";
+                listarUsuarios();
+            } else {
+                const err = await res.json();
+                msg.className = "msg error";
+                msg.innerText = err.erro || "Erro ao salvar usuário.";
+            }
+        } catch (e) {
+            msg.className = "msg error";
+            msg.innerText = "Erro na requisição.";
+        }
+    }
+
+    async function deletarUsuario(id) {
+        if (!confirm("Deseja realmente excluir este usuário?")) return;
+        await fetch(`${API_URL}/usuario/${id}`, { method: 'DELETE' });
+        listarUsuarios();
+    }
+
+    async function cadastrarCarro() {
+        const usuarioId = document.getElementById("selectUsuarioLogado").value;
+        const modelo = document.getElementById("modeloCarro").value;
+        const ano = parseInt(document.getElementById("anoCarro").value);
+        const preco = parseFloat(document.getElementById("precoCarro").value);
+        const msg = document.getElementById("msgCarro");
+
+        if (!usuarioId) {
+            msg.className = "msg error";
+            msg.innerText = "Nenhum usuário cadastrado/selecionado!";
+            return;
+        }
+
+        try {
+            const res = await fetch(`${API_URL}/carro/salvar?usuarioId=${usuarioId}`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ modelo, ano, preco })
+            });
+
+            if (res.ok) {
+                msg.className = "msg success";
+                msg.innerText = "Carro cadastrado com sucesso!";
+            } else {
+                const err = await res.json();
+                msg.className = "msg error";
+                msg.innerText = err.erro || "Erro ao cadastrar carro.";
+            }
+        } catch (e) {
+            msg.className = "msg error";
+            msg.innerText = "Erro de conexão ao salvar carro.";
+        }
+    }
+
+    // Carrega os usuários ao abrir a página
+    window.onload = listarUsuarios;
+</script>
+</body>
+</html>
